@@ -3,8 +3,8 @@
 # Além das funções e classes já definidas, podem acrescentar outras que considerem pertinentes.
 
 # Grupo 00:
-# 00000 Nome1
-# 00000 Nome2
+# 92737 André Morgado
+# 97343 Rafael Ferreira
 
 import sys
 from search import (
@@ -16,6 +16,9 @@ from search import (
     greedy_search,
     recursive_best_first_search,
 )
+
+import numpy as np
+from sys import stdin
 
 
 class TakuzuState:
@@ -34,52 +37,59 @@ class TakuzuState:
 
 class Board:
     """Representação interna de um tabuleiro de Takuzu."""
-
     def get_number(self, row: int, col: int) -> int:
         """Devolve o valor na respetiva posição do tabuleiro."""
-        # TODO
-        pass
+        
+        return self.matriz[row,col]
 
     def adjacent_vertical_numbers(self, row: int, col: int) -> (int, int):
         """Devolve os valores imediatamente abaixo e acima,
         respectivamente."""
-        # TODO
-        pass
+
+        return (self.get_number(row + 1,col),self.get_number(row - 1,col))
 
     def adjacent_horizontal_numbers(self, row: int, col: int) -> (int, int):
         """Devolve os valores imediatamente à esquerda e à direita,
         respectivamente."""
-        # TODO
-        pass
+    
+        return (self.get_number(row,col - 1),self.get_number(row,col + 1))
 
     @staticmethod
     def parse_instance_from_stdin():
         """Lê o test do standard input (stdin) que é passado como argumento
         e retorna uma instância da classe Board.
-
-        Por exemplo:
-            $ python3 takuzu.py < input_T01
-
-            > from sys import stdin
-            > stdin.readline()
         """
-        # TODO
-        pass
+        new_board = Board()
+        dim = int(stdin.readline())
+        new_board.N = dim
+        new_board.matriz = np.zeros([dim,dim], dtype=object)
 
-    # TODO: outros metodos da classe
+        for i in range(0, dim):
+            line = stdin.readline()
+            array = list(map(int, line.split('\t')))
+            n = 0
+            for j in array:
+                if j == 2:
+                    array[n] = [0,1]
+                n += 1
+            new_board.matriz[i] = array   
+        return new_board     
 
 
 class Takuzu(Problem):
     def __init__(self, board: Board):
         """O construtor especifica o estado inicial."""
-        # TODO
-        pass
+        self.initial = TakuzuState(board)
 
     def actions(self, state: TakuzuState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
+        for i in state.board.matriz:
+            if isinstance(i, list):
+                #TODO restrições
+
         # TODO
-        pass
+
 
     def result(self, state: TakuzuState, action):
         """Retorna o estado resultante de executar a 'action' sobre
@@ -106,8 +116,17 @@ class Takuzu(Problem):
 
 if __name__ == "__main__":
     # TODO:
-    # Ler o ficheiro do standard input,
+    # Ler o ficheiro do standard input, check
     # Usar uma técnica de procura para resolver a instância,
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
-    pass
+    tabuleiro = Board.parse_instance_from_stdin()
+    problema = Takuzu(tabuleiro)
+    problema.actions(problema.initial)
+    # depth_first_tree_search(problema)
+    a= tabuleiro.matriz.view()
+    #print(a)
+
+    # print(tabuleiro.get_number(0,1))
+    # print(tabuleiro.adjacent_vertical_numbers(2,2))
+    # print(tabuleiro.adjacent_horizontal_numbers(2,2))
