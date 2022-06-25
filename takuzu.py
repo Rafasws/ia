@@ -17,6 +17,7 @@ from search import (
     recursive_best_first_search,
 )
 
+from math import ceil
 import numpy as np
 from sys import stdin
 
@@ -45,15 +46,81 @@ class Board:
     def adjacent_vertical_numbers(self, row: int, col: int) -> (int, int):
         """Devolve os valores imediatamente abaixo e acima,
         respectivamente."""
-
-        return (self.get_number(row + 1,col),self.get_number(row - 1,col))
+        if row == 0:
+            return(self.get_number(row + 1,col), None)
+        elif row == (self.N - 1):
+            return(None, self.get_number(row - 1,col))
+        else:
+            return (self.get_number(row + 1,col),self.get_number(row - 1,col))
 
     def adjacent_horizontal_numbers(self, row: int, col: int) -> (int, int):
         """Devolve os valores imediatamente à esquerda e à direita,
         respectivamente."""
+        if col == 0:
+            return (None, self.get_number(row,col + 1))
+        elif col == (self.N - 1):
+            return (self.get_number(row, col - 1), None)
+        else:
+            return (self.get_number(row,col - 1), self.get_number(row,col + 1))
     
-        return (self.get_number(row,col - 1),self.get_number(row,col + 1))
+    def remove(self, row: int, col: int, num: int):
+        try:
+            self.get_number(row,col).remove(num)
+        except AttributeError:
+            pass
+        except ValueError:
+            pass
 
+    
+    def restricao_adjacentes(self):
+        """ Faz as restrições do dominio das células do tabuleiro ainda não atribuidas
+        com base na restrição que não há mais do que dois numeros iguais adjacentes"""
+        dim = self.N
+        for l in range(0, dim):
+            for c in range(0, dim):
+                num = self.get_number(l, c)
+                vizinhos_horizontais = self.adjacent_horizontal_numbers(l, c)
+                vizinhos_verticais = self.adjacent_vertical_numbers(l, c)
+                if isinstance(num, int):
+                    if vizinhos_horizontais[0] == num and isinstance(vizinhos_horizontais[1], list):
+                        self.remove(l, c + 1, num)
+                    if vizinhos_horizontais[1] == num and isinstance(vizinhos_horizontais[0], list):
+                        self.remove(l, c - 1, num)
+                    if vizinhos_verticais[1] == num and isinstance(vizinhos_verticais[0], list):
+                        self.remove(l + 1, c, num)
+                    if vizinhos_verticais[0] == num and isinstance(vizinhos_verticais[1], list):
+                        self.remove(l - 1 , c, num)
+                else:
+                    if vizinhos_horizontais[0] == vizinhos_horizontais[1]:
+                        self.remove(l, c, vizinhos_horizontais[0])
+                    if vizinhos_verticais[0] == vizinhos_verticais[1]:
+                        self.remove(l, c, vizinhos_verticais[0])
+
+    def restricao_nr_iguais(self):
+        """Há um número igual de 1s e 0s em cada linha e coluna (ou mais um 
+        para grelhas de dimensão ímpar)"""
+        dim = self.N
+        for linha, values in self.linhas.items():
+            if values[0] == values[1]:
+                continue
+            if values[0] == ceil(dim/2):
+                eliminar = 0
+            if values[1] == ceil(dim/2):
+                eliminar = 1
+            for coluna in range(0, dim):
+                self.remove(linha, coluna, eliminar)
+        
+        for coluna, values in self.linhas.items():
+            if values[0] == values[1]:
+                continue
+            if values[0] == ceil(dim/2):
+                eliminar = 0
+            if values[1] == ceil(dim/2):
+                eliminar = 1
+            for linha in range(0, dim):
+                self.remove(linha, coluna, eliminar)
+            
+            
     @staticmethod
     def parse_instance_from_stdin():
         """Lê o test do standard input (stdin) que é passado como argumento
@@ -64,15 +131,36 @@ class Board:
         new_board.N = dim
         new_board.matriz = np.zeros([dim,dim], dtype=object)
 
+        new_board.linhas = {key: 0 for key in range(0, dim)}
+        new_board.colunas = {key: 0 for key in range(0, dim)}
+
         for i in range(0, dim):
             line = stdin.readline()
             array = list(map(int, line.split('\t')))
             n = 0
+            nr_0 = 0 
+            nr_1 = 0
             for j in array:
-                if j == 2:
+                if j == 0:
+                    nr_0 += 1
+                elif j == 1:
+                    nr_1 += 1
+                else:
                     array[n] = [0,1]
                 n += 1
-            new_board.matriz[i] = array   
+            new_board.linhas[i] = [nr_0, nr_1]
+            new_board.matriz[i] = array  
+
+            for coluna in range(0, dim):
+                nr_0 = 0
+                nr_1 = 0
+                for linha in range(0, dim):
+                    if new_board.matriz[linha][coluna] == 0:
+                        nr_0 += 1
+                    if new_board.matriz[linha][coluna] == 1:
+                        nr_1 += 1
+                new_board.colunas[coluna] = [nr_0, nr_1]
+     
         return new_board     
 
 
@@ -84,11 +172,9 @@ class Takuzu(Problem):
     def actions(self, state: TakuzuState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        for i in state.board.matriz:
-            if isinstance(i, list):
-                #TODO restrições
 
         # TODO
+        pass
 
 
     def result(self, state: TakuzuState, action):
@@ -122,11 +208,11 @@ if __name__ == "__main__":
     # Imprimir para o standard output no formato indicado.
     tabuleiro = Board.parse_instance_from_stdin()
     problema = Takuzu(tabuleiro)
-    problema.actions(problema.initial)
-    # depth_first_tree_search(problema)
-    a= tabuleiro.matriz.view()
-    #print(a)
+    # problema.actions(problema.initial)
+    # # depth_first_tree_search(problema)
+    a = tabuleiro.matriz.view()
+    print(a)
+    tabuleiro.restricao_nr_iguais()
+    print(a)
 
-    # print(tabuleiro.get_number(0,1))
-    # print(tabuleiro.adjacent_vertical_numbers(2,2))
-    # print(tabuleiro.adjacent_horizontal_numbers(2,2))
+
