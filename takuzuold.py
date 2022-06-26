@@ -3,13 +3,13 @@
 # Além das funções e classes já definidas, podem acrescentar outras que considerem pertinentes.
 
 # Grupo 00:
-# 00000 Nome1
-# 00000 Nome2
+# 92737 André Morgado
+# 97343 Rafael Ferreira
+
 from copy import deepcopy
-import numpy as np
-from sys import stdin
+from curses import color_pair
+from hashlib import new
 import sys
-import time
 from search import (
     Problem,
     Node,
@@ -19,6 +19,11 @@ from search import (
     greedy_search,
     recursive_best_first_search,
 )
+
+import time
+from math import ceil
+import numpy as np
+from sys import stdin
 
 
 class TakuzuState:
@@ -61,58 +66,26 @@ class Board:
             return (self.get_number(row, col - 1), None)
         else:
             return (self.get_number(row,col - 1), self.get_number(row,col + 1))
-
-    @staticmethod
-    def parse_instance_from_stdin():
-        """Lê o test do standard input (stdin) que é passado como argumento
-        e retorna uma instância da classe Board."""
-        board = Board()
-        board.N = int(stdin.readline())
-        board.cel_livres = dict()
-        board.linhas = dict()
-        board.colunas = dict()
-        board.linhas_completas = set()
-        board.colunas_completas = set()
-
-        dim = board.N
-        board.matriz = np.zeros([dim,dim], dtype=int)
-        for l in range(0, dim):
-            line = stdin.readline()
-            array = list(map(int, line.split('\t')))
-            nr_0 = 0 
-            nr_1 = 0
-            for c in range(0, dim):
-                if array[c] == 0:
-                    nr_0 += 1
-                elif array[c] == 1:
-                    nr_1 += 1
-                else:
-                    board.cel_livres[(l,c)] = [0,1]
-            board.linhas[l] = [nr_0, nr_1]
-            board.matriz[l] = array  
-            if nr_0 + nr_1 == dim:
-                board.linhas_completas.add(tuple(array))
-
-        for c in range(0, dim):
-            nr_0 = 0
-            nr_1 = 0
-            for l in range(0, dim):
-                if board.matriz[l][c] == 0:
-                    nr_0 += 1
-                if board.matriz[l][c] == 1:
-                    nr_1 += 1
-            board.colunas[c] = [nr_0, nr_1]
-            if nr_0 + nr_1 == dim:
-                board.colunas_completas.add(tuple(board.matriz[:, c]))
-
-        return board   
-
-    def remove(self, key, valor):
+    
+    def copia(board):
+        new_board = Board()
+        new_board.N = board.N
+        new_board.matriz = board.matriz
+        new_board.linhas = board.linhas
+        new_board.colunas = board.colunas
+        new_board.linhas_completas = board.linhas_completas
+        new_board.colunas_completas = board.colunas_completas
+        return new_board
+    
+    def remove(self, row: int, col: int, num: int):
         try:
-            self.cel_livres[key].remove(valor)
-        except:
+            self.get_number(row,col).remove(num)
+        except AttributeError:
+            pass
+        except ValueError:
             pass
 
+    
     def restricao_adjacentes(self):
         """ Faz as restrições do dominio das células do tabuleiro ainda não atribuidas
         com base na restrição que não há mais do que dois numeros iguais adjacentes"""
@@ -122,20 +95,20 @@ class Board:
                 num = self.get_number(l, c)
                 vizinhos_horizontais = self.adjacent_horizontal_numbers(l, c)
                 vizinhos_verticais = self.adjacent_vertical_numbers(l, c)
-                if num in (0,1):
-                    if vizinhos_horizontais[0] == num and vizinhos_horizontais[1] == 2:
-                        self.remove((l, c + 1), num)
-                    if vizinhos_horizontais[1] == num and vizinhos_horizontais[0] == 2:
-                        self.remove((l, c - 1), num)
-                    if vizinhos_verticais[1] == num and vizinhos_verticais[0] == 2:
-                        self.remove((l + 1, c), num)
-                    if vizinhos_verticais[0] == num and vizinhos_verticais[1] == 2:
-                        self.remove((l - 1 , c), num)
+                if isinstance(num, int):
+                    if vizinhos_horizontais[0] == num and isinstance(vizinhos_horizontais[1], list):
+                        self.remove(l, c + 1, num)
+                    if vizinhos_horizontais[1] == num and isinstance(vizinhos_horizontais[0], list):
+                        self.remove(l, c - 1, num)
+                    if vizinhos_verticais[1] == num and isinstance(vizinhos_verticais[0], list):
+                        self.remove(l + 1, c, num)
+                    if vizinhos_verticais[0] == num and isinstance(vizinhos_verticais[1], list):
+                        self.remove(l - 1 , c, num)
                 else:
                     if vizinhos_horizontais[0] == vizinhos_horizontais[1]:
-                        self.remove((l, c), vizinhos_horizontais[0])
+                        self.remove(l, c, vizinhos_horizontais[0])
                     if vizinhos_verticais[0] == vizinhos_verticais[1]:
-                        self.remove((l, c), vizinhos_verticais[0])
+                        self.remove(l, c, vizinhos_verticais[0])
 
     def restricao_nr_iguais(self):
         """Há um número igual de 1s e 0s em cada linha e coluna (ou mais um 
@@ -145,54 +118,100 @@ class Board:
             eliminar = -1
             if values[0] == values[1]:
                 continue
-            if values[0] == np.ceil(dim/2):
+            if values[0] == ceil(dim/2):
                 eliminar = 0
-            if values[1] == np.ceil(dim/2):
+            if values[1] == ceil(dim/2):
                 eliminar = 1
             if eliminar != -1:
                 for coluna in range(0, dim):
-                    self.remove((linha, coluna), eliminar)
+                    self.remove(linha, coluna, eliminar)
         
         
         for coluna, values in self.colunas.items():
             eliminar = -1
             if values[0] == values[1]:
                 continue
-            if values[0] == np.ceil(dim/2):
+            if values[0] == ceil(dim/2):
                 eliminar = 0
-            if values[1] == np.ceil(dim/2):
+            if values[1] == ceil(dim/2):
                 eliminar = 1
             if eliminar != -1:
                 for linha in range(0, dim):
-                    self.remove((linha, coluna), eliminar)
-
-
+                    self.remove(linha, coluna, eliminar)
+        
     def lin_e_col_diferentes(self):
         """ Compara as linhas completas com as linhas por completar, devolve
         False se houver pelo menos uma linha, coluna cujas restriçoes do dominio
         não permitam que esta seja diferente de uma já completa. True caso
         ainda seja possivel terminar o jogo por este caminho """
         dim = self.N
-        cel_livres = self.cel_livres
         # obtem linha já completa
         for completa in self.linhas_completas:
-            for l in range(0, dim):
+            for i in range(0, dim):
                 # obtem linha do tabuleiro
-                linha = self.matriz[l]
+                linha = self.matriz[i]
                 if tuple(linha) == completa:
                     break # é a linha completa em questão
                 # verifica que nas posições quer não temos valor atribuido só há um hipotese em cada que tornaria esta linha igual a uma já completa
-                if all(list(map(lambda x, y, c: x == y or (x == 2 and len(cel_livres[(l,c)]) == 1 and cel_livres[(l,c)][0] == y), linha, completa, range(0, dim)))):
+                if all(list(map(lambda x, y: x == y or (isinstance(x, list) and len(x) == 1 and x[0] == y), linha, completa))):
                     return False # impossível seguir este caminho
         for completa in self.colunas_completas:
-            for c in range(0, dim):
-                coluna = self.matriz[:, c]
+            for i in range(0, dim):
+                coluna = self.matriz[:, i]
                 if tuple(coluna) == completa:
                     break
-                if all(list(map(lambda x, y, l: x == y or (x == 2 and len(cel_livres[(l,c)]) == 1 and cel_livres[(l,c)][0] == y), coluna, completa, range(0, dim)))):
+                if all(list(map(lambda x, y: x == y or (isinstance(x, list) and len(x) == 1 and x[0] == y), coluna, completa))):
                     return False
         return True
-        
+            
+    @staticmethod
+    def parse_instance_from_stdin():
+        """Lê o test do standard input (stdin) que é passado como argumento
+        e retorna uma instância da classe Board.
+        """
+        new_board = Board()
+        dim = int(stdin.readline())
+        new_board.N = dim
+        new_board.matriz = np.zeros([dim,dim], dtype=object)
+
+        new_board.linhas = {key: 0 for key in range(0, dim)}
+        new_board.linhas_completas = set()
+        new_board.colunas = {key: 0 for key in range(0, dim)}
+        new_board.colunas_completas = set()
+
+        for i in range(0, dim):
+            line = stdin.readline()
+            array = list(map(int, line.split('\t')))
+            n = 0
+            nr_0 = 0 
+            nr_1 = 0
+            for j in array:
+                if j == 0:
+                    nr_0 += 1
+                elif j == 1:
+                    nr_1 += 1
+                else:
+                    array[n] = [0,1]
+                n += 1
+            new_board.linhas[i] = [nr_0, nr_1]
+            new_board.matriz[i] = array  
+            if nr_0 + nr_1 == dim:
+                new_board.linhas_completas.add(tuple(array))
+
+        for coluna in range(0, dim):
+            nr_0 = 0
+            nr_1 = 0
+            for linha in range(0, dim):
+                if new_board.matriz[linha][coluna] == 0:
+                    nr_0 += 1
+                if new_board.matriz[linha][coluna] == 1:
+                    nr_1 += 1
+            new_board.colunas[coluna] = [nr_0, nr_1]
+            if nr_0 + nr_1 == dim:
+                new_board.colunas_completas.add(tuple(new_board.matriz[:, coluna]))
+        return new_board     
+
+
 class Takuzu(Problem):
     def __init__(self, board: Board):
         """O construtor especifica o estado inicial."""
@@ -202,26 +221,24 @@ class Takuzu(Problem):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
         dim = state.board.N
-        cel_livres = state.board.cel_livres
         actions = []
         state.board.restricao_adjacentes()
         state.board.restricao_nr_iguais()
-        min_len = 3
-        key_action = None
         if state.board.lin_e_col_diferentes():
-            for key, values in cel_livres.items():
-                if values == []:
-                    return []
-                elif len(values) < min_len:
-                    min_len = len(values)
-                    key_action = (key[0], key[1])
-                    actions = [(key[0], key[1], value) for value in values]
-            if key_action != None:
-                del cel_livres[key_action]
-                
-            return actions
-        else:  
-            return []
+            for linha in range(0,dim):
+                for coluna in range(0, dim):
+                    num = state.board.get_number(linha, coluna)
+                    if isinstance(num, int):
+                        continue     #e um numero, segue
+                    elif len(num) == 0:
+                        return [] #encontrou o dominio vazio
+                    elif len(num) == 1: # 1 hipotese
+                        return[(linha, coluna, num[0])]
+                    elif len(num) == 2: # 2 hipoteses
+                        return [(linha, coluna, num[0]), (linha, coluna, num[1])]
+            #print(actions)                  
+        else:
+            return actions #[]
 
 
     def result(self, state: TakuzuState, action):
@@ -229,16 +246,19 @@ class Takuzu(Problem):
         'state' passado como argumento. A ação a executar deve ser uma
         das presentes na lista obtida pela execução de
         self.actions(state)."""
-              #inicializações
+        #inicializações
         new_state = TakuzuState(state.board)
-        new_state.board = deepcopy(state.board)
+        new_state.board = state.board.copia()
         dim = new_state.board.N
         counter_linhas = new_state.board.linhas
         counter_colunas = new_state.board.colunas
+        # print(action)
+        # print(counter_linhas)
+        # print(counter_colunas)
+        # print('-------------')
         # faz ação
         new_state.board.matriz.itemset((action[0], action[1]), action[2])
         # print(new_state.board.matriz.view())
-        # print(new_state.board.cel_livres)
         # soma os contadores de 0s e 1s de cada linha e coluna
         counter_linhas[action[0]][action[2]] += 1
         counter_colunas[action[1]][action[2]] += 1
@@ -266,11 +286,11 @@ class Takuzu(Problem):
 
 if __name__ == "__main__":
     # TODO:
-    # Ler o ficheiro do standard input,
+    # Ler o ficheiro do standard input, check
     # Usar uma técnica de procura para resolver a instância,
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
-    #start_time = time.time()
+    start_time = time.time()
     board = Board.parse_instance_from_stdin()
     problem = Takuzu(board)
     # print(problem.initial.board.matriz.view())
@@ -286,4 +306,4 @@ if __name__ == "__main__":
             else:
                 print(goal.state.board.matriz[l][c], end= "\t")   
 
-    #print("--- %s seconds ---" % (time.time() - start_time))
+    print("--- %s seconds ---" % (time.time() - start_time))
