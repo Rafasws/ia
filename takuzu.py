@@ -6,6 +6,7 @@
 # 92737 André Morgado
 # 97343 Rafael Ferreira
 
+from copy import deepcopy
 from hashlib import new
 import sys
 from search import (
@@ -218,17 +219,15 @@ class Takuzu(Problem):
                     num = state.board.get_number(linha, coluna)
                     if isinstance(num, int):
                         continue     #e um numero, segue
-                    if len(num) == 0:
+                    elif len(num) == 0:
                         return [] #encontrou o dominio vazio
-                    if len(num) == 1: # 1 hipotese
-                        actions.append((linha, coluna, num[0]))
-                    # if len(num) == 2: # 2 hipoteses
-                    #     actions.append((linha, coluna, num[0]))
-                    #     actions.append((linha, coluna, num[1]))
-            return actions                    
+                    elif len(num) == 1: # 1 hipotese
+                        return[(linha, coluna, num[0])]
+                    elif len(num) == 2: # 2 hipoteses
+                        return [(linha, coluna, num[0]), (linha, coluna, num[1])]
+            #print(actions)                  
         else:
             return actions #[]
-        # TODO
 
 
     def result(self, state: TakuzuState, action):
@@ -238,7 +237,7 @@ class Takuzu(Problem):
         self.actions(state)."""
         #inicializações
         new_state = TakuzuState(state.board)
-        new_state.board = state.board
+        new_state.board = deepcopy(state.board)
         dim = new_state.board.N
         counter_linhas = new_state.board.linhas
         counter_colunas = new_state.board.colunas
@@ -273,27 +272,6 @@ class Takuzu(Problem):
 
     # TODO: outros metodos da classe
 
-def depth_first_graph_search(problem):
-    """
-    [Figure 3.7]
-    Search the deepest nodes in the search tree first.
-    Search through the successors of a problem to find a goal.
-    The argument frontier should be an empty queue.
-    Does not get trapped by loops.
-    If two paths reach a state, only use the first one.
-    """
-    frontier = [(Node(problem.initial))]  # Stack
-
-    explored = set()
-    while frontier:
-        node = frontier.pop()
-        if problem.goal_test(node.state):
-            return node
-        explored.add(node.state)
-        frontier.extend(child for child in node.expand(problem)
-                        if child.state not in explored and child not in frontier)
-    return None
-
 
 if __name__ == "__main__":
     # TODO:
@@ -307,15 +285,14 @@ if __name__ == "__main__":
     # print(problem.initial.board.matriz.view())
     # print(problem.initial.board.linhas)
     # print(problem.initial.board.colunas)
-    goal = depth_first_graph_search(problem)
-    # print("--- %s seconds ---" % (time.time() - start_time))
-    print(goal.state.board.matriz.view())
+    goal = depth_first_tree_search(problem)
+    #print(goal.state.board.matriz.view())
 
+    for l in range(0,board.N):
+        for c in range(0, board.N):
+            if c == (board.N-1):
+                print(goal.state.board.matriz[l][c], end= "\n")
+            else:
+                print(goal.state.board.matriz[l][c], end= "\t")   
 
-
-
- 
-
-
-
-
+    print("--- %s seconds ---" % (time.time() - start_time))
