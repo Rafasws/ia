@@ -6,6 +6,7 @@
 # 92737 André Morgado
 # 97343 Rafael Ferreira
 
+from hashlib import new
 import sys
 from search import (
     Problem,
@@ -17,6 +18,7 @@ from search import (
     recursive_best_first_search,
 )
 
+import time
 from math import ceil
 import numpy as np
 from sys import stdin
@@ -41,7 +43,7 @@ class Board:
     def get_number(self, row: int, col: int) -> int:
         """Devolve o valor na respetiva posição do tabuleiro."""
         
-        return self.matriz[row,col]
+        return self.matriz.item(row,col)
 
     def adjacent_vertical_numbers(self, row: int, col: int) -> (int, int):
         """Devolve os valores imediatamente abaixo e acima,
@@ -101,25 +103,54 @@ class Board:
         para grelhas de dimensão ímpar)"""
         dim = self.N
         for linha, values in self.linhas.items():
+            eliminar = -1
             if values[0] == values[1]:
                 continue
             if values[0] == ceil(dim/2):
                 eliminar = 0
             if values[1] == ceil(dim/2):
                 eliminar = 1
-            for coluna in range(0, dim):
-                self.remove(linha, coluna, eliminar)
+            if eliminar != -1:
+                for coluna in range(0, dim):
+                    self.remove(linha, coluna, eliminar)
         
-        for coluna, values in self.linhas.items():
+        
+        for coluna, values in self.colunas.items():
+            eliminar = -1
             if values[0] == values[1]:
                 continue
             if values[0] == ceil(dim/2):
                 eliminar = 0
             if values[1] == ceil(dim/2):
                 eliminar = 1
-            for linha in range(0, dim):
-                self.remove(linha, coluna, eliminar)
-            
+            if eliminar != -1:
+                for linha in range(0, dim):
+                    self.remove(linha, coluna, eliminar)
+        
+    def lin_e_col_diferentes(self):
+        """ Compara as linhas completas com as linhas por completar, devolve
+        False se houver pelo menos uma linha, coluna cujas restriçoes do dominio
+        não permitam que esta seja diferente de uma já completa. True caso
+        ainda seja possivel terminar o jogo por este caminho """
+        dim = self.N
+        # obtem linha já completa
+        for completa in self.linhas_completas:
+            for i in range(0, dim):
+                # obtem linha do tabuleiro
+                linha = self.matriz[i]
+                if tuple(linha) == completa:
+                    break # é a linha completa em questão
+                # verifica que nas posições quer não temos valor atribuido só há um hipotese em cada que tornaria esta linha igual a uma já completa
+                if all(list(map(lambda x, y: x == y or (isinstance(x, list) and len(x) == 1 and x[0] == y), linha, completa))):
+                    return False # impossível seguir este caminho
+        for completa in self.colunas_completas:
+            for i in range(0, dim):
+                coluna = self.matriz[:, i]
+                if tuple(coluna) == completa:
+                    break
+                if all(list(map(lambda x, y: x == y or (isinstance(x, list) and len(x) == 1 and x[0] == y), coluna, completa))):
+                    return False
+        return True
             
     @staticmethod
     def parse_instance_from_stdin():
@@ -132,7 +163,9 @@ class Board:
         new_board.matriz = np.zeros([dim,dim], dtype=object)
 
         new_board.linhas = {key: 0 for key in range(0, dim)}
+        new_board.linhas_completas = set()
         new_board.colunas = {key: 0 for key in range(0, dim)}
+        new_board.colunas_completas = set()
 
         for i in range(0, dim):
             line = stdin.readline()
@@ -150,17 +183,20 @@ class Board:
                 n += 1
             new_board.linhas[i] = [nr_0, nr_1]
             new_board.matriz[i] = array  
+            if nr_0 + nr_1 == dim:
+                new_board.linhas_completas.add(tuple(array))
 
-            for coluna in range(0, dim):
-                nr_0 = 0
-                nr_1 = 0
-                for linha in range(0, dim):
-                    if new_board.matriz[linha][coluna] == 0:
-                        nr_0 += 1
-                    if new_board.matriz[linha][coluna] == 1:
-                        nr_1 += 1
-                new_board.colunas[coluna] = [nr_0, nr_1]
-     
+        for coluna in range(0, dim):
+            nr_0 = 0
+            nr_1 = 0
+            for linha in range(0, dim):
+                if new_board.matriz[linha][coluna] == 0:
+                    nr_0 += 1
+                if new_board.matriz[linha][coluna] == 1:
+                    nr_1 += 1
+            new_board.colunas[coluna] = [nr_0, nr_1]
+            if nr_0 + nr_1 == dim:
+                new_board.colunas_completas.add(tuple(new_board.matriz[:, coluna]))
         return new_board     
 
 
@@ -172,9 +208,27 @@ class Takuzu(Problem):
     def actions(self, state: TakuzuState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-
+        dim = state.board.N
+        actions = []
+        state.board.restricao_adjacentes()
+        state.board.restricao_nr_iguais()
+        if state.board.lin_e_col_diferentes():
+            for linha in range(0,dim):
+                for coluna in range(0, dim):
+                    num = state.board.get_number(linha, coluna)
+                    if isinstance(num, int):
+                        continue     #e um numero, segue
+                    if len(num) == 0:
+                        return [] #encontrou o dominio vazio
+                    if len(num) == 1: # 1 hipotese
+                        actions.append((linha, coluna, num[0]))
+                    # if len(num) == 2: # 2 hipoteses
+                    #     actions.append((linha, coluna, num[0]))
+                    #     actions.append((linha, coluna, num[1]))
+            return actions                    
+        else:
+            return actions #[]
         # TODO
-        pass
 
 
     def result(self, state: TakuzuState, action):
@@ -182,15 +236,35 @@ class Takuzu(Problem):
         'state' passado como argumento. A ação a executar deve ser uma
         das presentes na lista obtida pela execução de
         self.actions(state)."""
-        # TODO
-        pass
+        #inicializações
+        new_state = TakuzuState(state.board)
+        new_state.board = state.board
+        dim = new_state.board.N
+        counter_linhas = new_state.board.linhas
+        counter_colunas = new_state.board.colunas
+        # print(action)
+        # print(counter_linhas)
+        # print(counter_colunas)
+        # print('-------------')
+        # faz ação
+        new_state.board.matriz.itemset((action[0], action[1]), action[2])
+        # print(new_state.board.matriz.view())
+        # soma os contadores de 0s e 1s de cada linha e coluna
+        counter_linhas[action[0]][action[2]] += 1
+        counter_colunas[action[1]][action[2]] += 1
+        # vê se terminamos alguma linha ou coluna e caso tenha, adcioanmos aos sets
+        if counter_linhas[action[0]][0] + counter_linhas[action[0]][1] == dim:
+            new_state.board.linhas_completas.add(tuple(new_state.board.matriz[action[0]]))
+        if counter_colunas[action[1]][0] + counter_colunas[action[1]][1] == dim:
+            new_state.board.colunas_completas.add(tuple(new_state.board.matriz[:, action[1]]))
+        return new_state
 
     def goal_test(self, state: TakuzuState):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas com uma sequência de números adjacentes."""
-        # TODO
-        pass
+        return len(state.board.linhas_completas) == state.board.N and\
+                 len(state.board.colunas_completas) == state.board.N
 
     def h(self, node: Node):
         """Função heuristica utilizada para a procura A*."""
@@ -199,6 +273,27 @@ class Takuzu(Problem):
 
     # TODO: outros metodos da classe
 
+def depth_first_graph_search(problem):
+    """
+    [Figure 3.7]
+    Search the deepest nodes in the search tree first.
+    Search through the successors of a problem to find a goal.
+    The argument frontier should be an empty queue.
+    Does not get trapped by loops.
+    If two paths reach a state, only use the first one.
+    """
+    frontier = [(Node(problem.initial))]  # Stack
+
+    explored = set()
+    while frontier:
+        node = frontier.pop()
+        if problem.goal_test(node.state):
+            return node
+        explored.add(node.state)
+        frontier.extend(child for child in node.expand(problem)
+                        if child.state not in explored and child not in frontier)
+    return None
+
 
 if __name__ == "__main__":
     # TODO:
@@ -206,13 +301,21 @@ if __name__ == "__main__":
     # Usar uma técnica de procura para resolver a instância,
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
-    tabuleiro = Board.parse_instance_from_stdin()
-    problema = Takuzu(tabuleiro)
-    # problema.actions(problema.initial)
-    # # depth_first_tree_search(problema)
-    a = tabuleiro.matriz.view()
-    print(a)
-    tabuleiro.restricao_nr_iguais()
-    print(a)
+    start_time = time.time()
+    board = Board.parse_instance_from_stdin()
+    problem = Takuzu(board)
+    # print(problem.initial.board.matriz.view())
+    # print(problem.initial.board.linhas)
+    # print(problem.initial.board.colunas)
+    goal = depth_first_graph_search(problem)
+    # print("--- %s seconds ---" % (time.time() - start_time))
+    print(goal.state.board.matriz.view())
+
+
+
+
+ 
+
+
 
 
