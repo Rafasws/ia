@@ -2,19 +2,22 @@
 # Devem alterar as classes e funções neste ficheiro de acordo com as instruções do enunciado.
 # Além das funções e classes já definidas, podem acrescentar outras que considerem pertinentes.
 
-# Grupo 00:
-# 00000 Nome1
-# 00000 Nome2
+# Grupo 19:
+# 92737 André Morgado
+# 97347 Rafael Ferreira
+
 from copy import deepcopy
+import time
+from tracemalloc import start
 import numpy as np
 from sys import stdin
-import sys
-import time
 from search import (
     Problem,
     Node,
     astar_search,
     breadth_first_tree_search,
+    compare_graph_searchers,
+    compare_searchers,
     depth_first_tree_search,
     greedy_search,
     recursive_best_first_search,
@@ -68,46 +71,56 @@ class Board:
         e retorna uma instância da classe Board."""
         board = Board()
         board.N = int(stdin.readline())
-        board.cel_livres = dict()
-        board.linhas = dict()
-        board.colunas = dict()
-        board.linhas_completas = set()
-        board.colunas_completas = set()
+        board.cel_livres = dict() # dicionário com as posicoes a preencher as opcoes possiveis
+        board.linhas = dict()   # contador de 0s e 1s em cada linha
+        board.colunas = dict()  # contador de 0s e 1s em cada coluna
+        board.linhas_completas = set() # set com as linhas completas
+        board.colunas_completas = set() # set com as colunas completas
 
         dim = board.N
+        # inicializa a matriz
         board.matriz = np.zeros([dim,dim], dtype=int)
+        # le linhas do input
         for l in range(0, dim):
             line = stdin.readline()
             array = list(map(int, line.split('\t')))
-            nr_0 = 0 
-            nr_1 = 0
+            nr_0 = 0 # contador de 0s por linha
+            nr_1 = 0 # contador de 1s por coluna
             for c in range(0, dim):
                 if array[c] == 0:
                     nr_0 += 1
                 elif array[c] == 1:
                     nr_1 += 1
                 else:
+                    # guarda no dicionario a posicao livre
                     board.cel_livres[(l,c)] = [0,1]
+            # guarda o nº de 0s e 1s de cada linha        
             board.linhas[l] = [nr_0, nr_1]
+            # guarda linha na matriz
             board.matriz[l] = array  
+            # guarda as linhas comletas no set
             if nr_0 + nr_1 == dim:
                 board.linhas_completas.add(tuple(array))
 
+        # apos feita a matriz vai ver o nr de 0s e 1s por colunas e se já existe
+        # alguma coluna completa
         for c in range(0, dim):
-            nr_0 = 0
-            nr_1 = 0
+            nr_0 = 0 # contador de 0s na coluna
+            nr_1 = 0 # contador de 1s na coluna
             for l in range(0, dim):
                 if board.matriz[l][c] == 0:
                     nr_0 += 1
                 if board.matriz[l][c] == 1:
                     nr_1 += 1
+            # guarda o nr de 0s e 1s da coluna
             board.colunas[c] = [nr_0, nr_1]
+            # adiciona coluna completa ao set de colunas completas
             if nr_0 + nr_1 == dim:
                 board.colunas_completas.add(tuple(board.matriz[:, c]))
-
         return board   
 
     def remove(self, key, valor):
+        """ Remove valor possivel de célula livre """
         try:
             self.cel_livres[key].remove(valor)
         except:
@@ -123,17 +136,23 @@ class Board:
                 vizinhos_horizontais = self.adjacent_horizontal_numbers(l, c)
                 vizinhos_verticais = self.adjacent_vertical_numbers(l, c)
                 if num in (0,1):
+                    # nr igual à esquerda e cel livre à direita
                     if vizinhos_horizontais[0] == num and vizinhos_horizontais[1] == 2:
                         self.remove((l, c + 1), num)
+                    # nr igual à direita e cel livre à esquerda
                     if vizinhos_horizontais[1] == num and vizinhos_horizontais[0] == 2:
                         self.remove((l, c - 1), num)
+                    # nr igual em cima e cel livre em baixo
                     if vizinhos_verticais[1] == num and vizinhos_verticais[0] == 2:
                         self.remove((l + 1, c), num)
+                    # nr igual em baixo e cel livre em cima
                     if vizinhos_verticais[0] == num and vizinhos_verticais[1] == 2:
                         self.remove((l - 1 , c), num)
                 else:
+                    # cel livre entre dois numeros iguais na horizontal
                     if vizinhos_horizontais[0] == vizinhos_horizontais[1]:
                         self.remove((l, c), vizinhos_horizontais[0])
+                    # cel livre entre dois numeros iguais na vertical
                     if vizinhos_verticais[0] == vizinhos_verticais[1]:
                         self.remove((l, c), vizinhos_verticais[0])
 
@@ -143,17 +162,22 @@ class Board:
         dim = self.N
         for linha, values in self.linhas.items():
             eliminar = -1
+            # linha completa
             if values[0] == values[1]:
-                continue
+                continue # não interessa
+            # já so falta acrescentar 1s a linha
             if values[0] == np.ceil(dim/2):
-                eliminar = 0
+                # eliminamos os 0s como possibilidade das celulas livres dessa linha
+                eliminar = 0 
             if values[1] == np.ceil(dim/2):
+                # eliminamos os 1s como possibilidade das celulas livres dessa linha
                 eliminar = 1
             if eliminar != -1:
+                # eliminar opcções 
                 for coluna in range(0, dim):
                     self.remove((linha, coluna), eliminar)
         
-        
+        # mesma coisa so que para colunas
         for coluna, values in self.colunas.items():
             eliminar = -1
             if values[0] == values[1]:
@@ -204,22 +228,28 @@ class Takuzu(Problem):
         dim = state.board.N
         cel_livres = state.board.cel_livres
         actions = []
+        # aplica as restrições de dominio das células livres
         state.board.restricao_adjacentes()
         state.board.restricao_nr_iguais()
         min_len = 3
         key_action = None
+        # verifica que se ainda é possivel obter linhas e colunas diferentes
         if state.board.lin_e_col_diferentes():
             for key, values in cel_livres.items():
+                # encontrou uma célula livre que não tem mais opcoes
                 if values == []:
+                    # não é possivel terminar o jogo por este camnho
                     return []
+                # guarda as acoes
                 elif len(values) < min_len:
                     min_len = len(values)
                     key_action = (key[0], key[1])
                     actions = [(key[0], key[1], value) for value in values]
+            # retorna as acoes, e apaga da celula livre se houver
             if key_action != None:
                 del cel_livres[key_action]
-                
             return actions
+        # não é possível terminar o jogo por este caminho
         else:  
             return []
 
@@ -237,8 +267,6 @@ class Takuzu(Problem):
         counter_colunas = new_state.board.colunas
         # faz ação
         new_state.board.matriz.itemset((action[0], action[1]), action[2])
-        # print(new_state.board.matriz.view())
-        # print(new_state.board.cel_livres)
         # soma os contadores de 0s e 1s de cada linha e coluna
         counter_linhas[action[0]][action[2]] += 1
         counter_colunas[action[1]][action[2]] += 1
@@ -258,10 +286,7 @@ class Takuzu(Problem):
 
     def h(self, node: Node):
         """Função heuristica utilizada para a procura A*."""
-        # TODO
-        pass
-
-    # TODO: outros metodos da classe
+        return len(node.state.board.cel_livres)
 
 
 if __name__ == "__main__":
@@ -270,20 +295,76 @@ if __name__ == "__main__":
     # Usar uma técnica de procura para resolver a instância,
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
-    #start_time = time.time()
+    def imprime_goal(board, goal):
+        for l in range(0,board.N):
+            for c in range(0, board.N):
+                if c == (board.N-1):
+                    print(goal.state.board.matriz[l][c], end= "\n")
+                else:
+                    print(goal.state.board.matriz[l][c], end= "\t") 
+
     board = Board.parse_instance_from_stdin()
-    problem = Takuzu(board)
-    # print(problem.initial.board.matriz.view())
-    # print(problem.initial.board.linhas)
-    # print(problem.initial.board.colunas)
-    goal = depth_first_tree_search(problem)
-    #print(goal.state.board.matriz.view())
+    problem0 = Takuzu(board)
+    problem1 = deepcopy(problem0)
+    problem2 = deepcopy(problem0)
+    problem3 = deepcopy(problem0)
+    problem4 = deepcopy(problem0)
+    # Largura
+    # start_time = time.time()
+    # goal = breadth_first_tree_search(problem0)
+    # imprime_goal(board, goal)
+    # print("Largura primeiro:")
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
-    for l in range(0,board.N):
-        for c in range(0, board.N):
-            if c == (board.N-1):
-                print(goal.state.board.matriz[l][c], end= "\n")
-            else:
-                print(goal.state.board.matriz[l][c], end= "\t")   
+    # print("-----------")
 
+    # # Profundidade
+    # start_time2 = time.time()
+    # problem = Takuzu(board)
+    # goal = depth_first_tree_search(problem1)
+    # imprime_goal(board, goal)
+    # print("Profundidade primeiro:")
+    # print("--- %s seconds ---" % (time.time() - start_time2))
+
+    # print("-----------")
+
+    # # Gananciosa
+    # start_time3 = time.time()
+    # goal = greedy_search(problem2)
+    # imprime_goal(board, goal)
+    # print("Greedy:")
+    # print("--- %s seconds ---" % (time.time() - start_time3))
+    
+    # print("-----------")
+
+    # # Astar_search
+    # start_time4 = time.time()
+    # goal = astar_search(problem3, lambda x:problem.h(x))
+    # imprime_goal(board, goal)
+    # print("A*:")
+    # print("--- %s seconds ---" % (time.time() - start_time4))
+
+    # print("-----------")
+
+    compare_searchers(problems=[problem0], 
+                    header= ['Searcher', 'Valores'], 
+                    searchers=[breadth_first_tree_search])
+
+    compare_searchers(problems=[problem1], 
+                    header= ['Searcher', 'Valores'], 
+                    searchers=[depth_first_tree_search])
+
+    compare_searchers(problems=[problem2], 
+                    header= ['Searcher', 'Valores'], 
+                    searchers=[greedy_search])
+
+    compare_searchers(problems=[problem3], 
+                    header= ['Searcher', 'Valores'], 
+                    searchers=[astar_search])
+    
+
+
+    # imprime matriz com o output indicado
+      
     #print("--- %s seconds ---" % (time.time() - start_time))
+
